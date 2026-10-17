@@ -3,10 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
 # Create the namespace with:  npx wrangler kv namespace create KV
-# then paste the printed id here.
+# then replace the id below with the printed one (this one is the maintainer's).
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "cab644ccd64041e2a7aadfa9f6807b24"
 
 [vars]
 DISPLAY_TZ = "Asia/Tokyo"
