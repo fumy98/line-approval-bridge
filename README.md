@@ -149,6 +149,22 @@ claude mcp add line-approval --scope user \
 
 `--scope user` にすると、すべてのプロジェクトと定期タスクから使えます。値は手元の `~/.claude.json` にだけ保存されます。`claude mcp list` で `line-approval` が `Connected` になっていれば完了です。
 
+### つまずきやすい点（実際に詰まったところ）
+
+| 症状 | 原因と対処 |
+|---|---|
+| LINE Developers コンソールで Messaging API のチャネルが作れない | 先に [LINE Official Account Manager](https://manager.line.biz/) で公式アカウントを作り、そこで「Messaging API を利用する」を押します（手順 1）。Developers コンソール側から始めると迷子になりがちです |
+| 自分の userId がどこにあるか分からない | 「チャネル基本設定」タブの**一番下**の「あなたのユーザーID」（`U` で始まる 33 文字）。LINE アプリのプロフィールにある ID（@〜 や任意の ID）とは別物です |
+| 通知が届かない（エラーも出ない） | 公式アカウントを**友だち追加していない**ことが多いです。「Messaging API設定」タブの QR コードを LINE アプリで読み取ります |
+| ボタンを押す前に「メッセージありがとうございます」等の自動返信が来る | 応答設定の **応答メッセージをオフ** にします（手順 1-5）。オンのままだとブリッジの返事と混ざります |
+| PC / Mac 版の LINE でボタンが出ない | 古い版はクイックリプライ（スマホのみ表示）だけでした。今の版はメッセージ内にボタンを出すので、`npx wrangler deploy` し直せば PC 版でも押せます |
+| 返信しても `pending` のまま | Webhook URL の登録漏れか「Webhook の利用」がオフです。`node client/dist/cli.js setup-webhook` を実行すると、登録と疎通テストをまとめて行い、オフなら警告を出します |
+| `wrangler secret put` で貼り付けても何も表示されない | 仕様です（入力は画面に出ません）。貼り付けて Enter を押せば登録されます。登録済みの名前は `npx wrangler secret list` で確認できます（値は出ません） |
+| `wrangler.toml` の KV id を書き換え忘れた | `deploy` が KV のエラーで止まります。`npx wrangler kv namespace list` で id を確認して書き換えます |
+| トークンを `~/.zshrc` に直接書きたくない | 別ファイル（例 `~/.config/line-approval-bridge/env`、権限 600）に `export` 2 行を書き、`~/.zshrc` から `source` すると、設定ファイルを人に見せるときに安全です |
+| Claude Code で `line-approval` のツールが見えない・古いまま | `claude mcp add` のあとや `npm run build` し直したあとは、Claude Code（デスクトップアプリ）を再起動します。定期タスクから確認なしで使うには、許可に `mcp__line-approval__notify` などを追加します |
+| 時刻を指定した通知がスリープ中に送られない | Mac 側で `sleep` や定期タスクで待つと、スリープ中は動きません。`--at` / `send_at` の予約送信を使うと Worker 側で送るので届きます（「予約送信」の節） |
+
 ### トークンの置き場所まとめ
 
 | 値 | 置き場所 | git に入るか |
