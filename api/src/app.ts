@@ -24,6 +24,7 @@ const MIN_TIMEOUT = 60;
 const MAX_TIMEOUT = 7 * 24 * 60 * 60;
 const DEFAULT_TIMEOUT = 24 * 60 * 60;
 const DEFAULT_OPTIONS = ["承認", "却下"];
+const APPROVE_COLOR = "#06C755"; // LINE green
 
 export function allowedUsers(env: Env): string[] {
   return (env.ALLOWED_USER_IDS ?? "")
@@ -110,15 +111,23 @@ export function approvalMessage(env: Env, r: ApprovalRequest): LineMessage {
   });
   return {
     type: "flex",
-    altText: `承認依頼 #${r.id}: ${r.question}`.slice(0, 400),
+    // Shown in the chat list, notifications and the lock screen, so the question comes first.
+    altText: `${r.question}（承認依頼 #${r.id}）`.slice(0, 400),
     contents: {
       type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: APPROVE_COLOR,
+        paddingAll: "md",
+        contents: [{ type: "text", text: "承認のお願い", weight: "bold", size: "sm", color: "#FFFFFF" }],
+      },
       body: {
         type: "box",
         layout: "vertical",
-        spacing: "md",
+        spacing: "lg",
         contents: [
-          { type: "text", text: r.question, wrap: true },
+          { type: "text", text: r.question, wrap: true, weight: "bold", size: "lg" },
           {
             type: "text",
             text: `#${r.id}  期限 ${formatDeadline(env, r.expiresAt)}\n${how}`,
@@ -128,18 +137,21 @@ export function approvalMessage(env: Env, r: ApprovalRequest): LineMessage {
           },
         ],
       },
+      // Full-width buttons stacked vertically so long or many options stay readable.
       footer: {
         type: "box",
         layout: "vertical",
-        spacing: "sm",
+        spacing: "md",
         contents: r.options.map((label, i) => ({
           type: "button",
           style: i === 0 ? "primary" : "secondary",
-          height: "sm",
+          ...(i === 0 ? { color: APPROVE_COLOR } : {}),
+          height: "md",
           action: postback(label, i),
         })),
       },
     },
+    // Phone-side shortcut above the input box; also a fallback where Flex is not rendered.
     quickReply: {
       items: r.options.map((label, i) => ({ type: "action", action: postback(label, i) })),
     },

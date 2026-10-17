@@ -76,6 +76,25 @@ describe("approval request lifecycle", () => {
     expect(JSON.stringify(msg.contents)).toContain(`#${r.id}`);
   });
 
+  it("renders a prominent approval card", async () => {
+    const t = setup();
+    const r = await create(t, { options: ["承認", "却下", "保留"] });
+    const msg = t.line.pushes[0].messages[0] as {
+      altText: string;
+      contents: {
+        body: { contents: { text: string; weight?: string; size?: string }[] };
+        footer: { layout: string; contents: { style: string; height: string; color?: string }[] };
+      };
+    };
+    expect(msg.altText.startsWith("公開してよいですか？")).toBe(true);
+    expect(msg.contents.body.contents[0]).toMatchObject({ text: "公開してよいですか？", weight: "bold", size: "lg" });
+    expect(msg.contents.footer.layout).toBe("vertical");
+    expect(msg.contents.footer.contents.map((b) => b.style)).toEqual(["primary", "secondary", "secondary"]);
+    expect(msg.contents.footer.contents.every((b) => b.height === "md")).toBe(true);
+    expect(msg.contents.footer.contents[0].color).toBe("#06C755");
+    expect(r.id).toBeTruthy();
+  });
+
   it("pending -> answered via postback button", async () => {
     const t = setup();
     const r = await create(t);
