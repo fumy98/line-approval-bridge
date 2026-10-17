@@ -1,0 +1,6 @@
+# Copy to api/.dev.vars for `npm run dev` (never commit .dev.vars).
+LINE_CHANNEL_SECRET=local-dev-secret
+LINE_CHANNEL_ACCESS_TOKEN=unused-in-dry-run
+API_TOKEN=local-dev-token
+ALLOWED_USER_IDS=Udev0000000000000000000000000000
+LINE_DRY_RUN=true

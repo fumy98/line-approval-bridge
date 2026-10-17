@@ -1,0 +1,12 @@
+{
+  "name": "line-approval-bridge-monorepo",
+  "private": true,
+  "workspaces": ["api", "client"],
+  "scripts": {
+    "test": "npm test --workspaces",
+    "build": "npm run build --workspace client",
+    "typecheck": "npm run typecheck --workspaces",
+    "dev": "npm run dev --workspace api",
+    "simulate": "node scripts/simulate-webhook.mjs"
+  }
+}

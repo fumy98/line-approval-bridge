@@ -1,0 +1,33 @@
+{
+  "name": "line-approval-bridge",
+  "version": "0.1.0",
+  "description": "Let AI agents notify you on LINE and wait for your approval (CLI + MCP server).",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/client.js",
+  "types": "dist/client.d.ts",
+  "bin": {
+    "line-approval": "dist/cli.js",
+    "line-approval-mcp": "dist/mcp.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

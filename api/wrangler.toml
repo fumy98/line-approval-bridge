@@ -1,0 +1,18 @@
+name = "line-approval-bridge"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# Create the namespace with:  npx wrangler kv namespace create KV
+# then paste the printed id here.
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+DISPLAY_TZ = "Asia/Tokyo"
+
+# Secrets are NOT stored here. Set them with:
+#   npx wrangler secret put LINE_CHANNEL_SECRET
+#   npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
+#   npx wrangler secret put API_TOKEN
+#   npx wrangler secret put ALLOWED_USER_IDS
