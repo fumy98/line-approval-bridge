@@ -87,23 +87,52 @@ function formatDeadline(env: Env, ms: number): string {
   }).format(new Date(ms));
 }
 
-function approvalMessage(env: Env, r: ApprovalRequest): LineMessage {
-  const how = r.allowFreeText
-    ? "下のボタンで回答するか、文字で返信してください。"
-    : "下のボタンで回答してください。";
+/**
+ * Buttons live inside a Flex bubble so they render on LINE for PC/Mac as well as phones
+ * (quick replies only appear on phones). Quick replies are kept as a phone-side shortcut.
+ */
+export function approvalMessage(env: Env, r: ApprovalRequest): LineMessage {
+  const how = r.allowFreeText ? "ボタンで回答するか、文字で返信してください。" : "ボタンで回答してください。";
+  const postback = (label: string, i: number) => ({
+    type: "postback",
+    label,
+    data: `lab=1&id=${r.id}&o=${i}`,
+    displayText: label,
+  });
   return {
-    type: "text",
-    text: `${r.question}\n\n[#${r.id}] ${how}\n期限: ${formatDeadline(env, r.expiresAt)}`,
+    type: "flex",
+    altText: `承認依頼 #${r.id}: ${r.question}`.slice(0, 400),
+    contents: {
+      type: "bubble",
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "md",
+        contents: [
+          { type: "text", text: r.question, wrap: true },
+          {
+            type: "text",
+            text: `#${r.id}  期限 ${formatDeadline(env, r.expiresAt)}\n${how}`,
+            wrap: true,
+            size: "xs",
+            color: "#888888",
+          },
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: r.options.map((label, i) => ({
+          type: "button",
+          style: i === 0 ? "primary" : "secondary",
+          height: "sm",
+          action: postback(label, i),
+        })),
+      },
+    },
     quickReply: {
-      items: r.options.map((label, i) => ({
-        type: "action",
-        action: {
-          type: "postback",
-          label,
-          data: `lab=1&id=${r.id}&o=${i}`,
-          displayText: label,
-        },
-      })),
+      items: r.options.map((label, i) => ({ type: "action", action: postback(label, i) })),
     },
   };
 }

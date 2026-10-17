@@ -216,7 +216,7 @@ esac
 - **ボタンを押す**（いちばん確実）
 - **ボタンと同じ文字を送る**（例: `承認`）→ 最新の依頼への回答
 - **自由に書いて送る**（例: `3 番だけ差し替えて`）→ 最新の依頼への自由入力回答（`allow_free_text` が true の場合）
-- **`#ID 内容` と送る**（例: `#K7Q2MX 却下`）→ 古い依頼にも回答できる。ID はメッセージ内の `[#K7Q2MX]`
+- **`#ID 内容` と送る**（例: `#K7Q2MX 却下`）→ 古い依頼にも回答できる。ID はメッセージ内の `#K7Q2MX`
 - 回答は最初の 1 回だけ有効。期限切れ・回答済みの依頼にはそう返事します
 
 ## HTTP API
@@ -238,7 +238,7 @@ esac
 
 - **月 200 通**: LINE の無料プランでは push（`notify` と `ask_approval`）が 1 回 1 通として数えられます。「受け付けました」の返事は reply なので数えられません。`line-approval quota` で確認できます
 - **反映に最大 1 分ほどかかることがあります**: Workers KV は結果整合のため、ボタンを押してから `answered` が読めるまで遅れる場合があります。人の承認待ちという用途では問題にならない想定です
-- **ボタンは最新のメッセージにしか出ません**: LINE のクイックリプライの仕様です。古い依頼には `#ID 内容` で答えてください
+- **ボタンはメッセージ内（Flex Message）に表示**されるので、スマホでも PC 版 LINE でも押せます。スマホでは入力欄の上にもクイックリプライのボタンが出ます（こちらは最新のメッセージのみ）
 - **1 対 1 のトークのみ**: グループ・複数人での承認は対象外です
 
 ## ローカル開発
@@ -253,7 +253,7 @@ npm run dev                                   # http://localhost:8787
 export LINE_APPROVAL_URL=http://localhost:8787 LINE_APPROVAL_TOKEN=local-dev-token
 node client/dist/cli.js ask "テスト" --wait 120 --print value
 
-# さらに別のターミナルで、LINE で返信したことにする（ID は dev サーバーのログの [#XXXXXX]）
+# さらに別のターミナルで、LINE で返信したことにする（ID は dev サーバーのログの #XXXXXX）
 npm run simulate -- tap XXXXXX 0              # ボタン 0 番を押す
 npm run simulate -- text "承認"                # 文字で返信
 npm run simulate -- text "hi" --user Uother   # 許可リスト外のユーザー（無視される）

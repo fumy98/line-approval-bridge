@@ -48,8 +48,8 @@ function bridge() {
   }
 
   const lastPushedId = () => {
-    const msg = line.pushes.at(-1)!.messages[0] as { text: string };
-    return msg.text.match(/#([0-9A-Z]{6})/)![1];
+    const msg = line.pushes.at(-1)!.messages[0] as { altText: string };
+    return msg.altText.match(/#([0-9A-Z]{6})/)![1];
   };
 
   // The user answers on the 2nd poll.

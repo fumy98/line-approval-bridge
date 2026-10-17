@@ -62,12 +62,18 @@ describe("approval request lifecycle", () => {
     expect(r.status).toBe("pending");
     expect(r.options).toEqual(["承認", "却下"]);
     const msg = t.line.pushes[0].messages[0] as {
-      text: string;
+      type: string;
+      altText: string;
+      contents: { footer: { contents: { action: { label: string; data: string } }[] } };
       quickReply: { items: { action: { label: string; data: string } }[] };
     };
-    expect(msg.text).toContain(`#${r.id}`);
+    expect(msg.type).toBe("flex");
+    expect(msg.altText).toContain(`#${r.id}`);
+    const buttons = msg.contents.footer.contents.map((b) => b.action);
+    expect(buttons.map((b) => b.label)).toEqual(["承認", "却下"]);
+    expect(buttons[0].data).toBe(`lab=1&id=${r.id}&o=0`);
     expect(msg.quickReply.items.map((i) => i.action.label)).toEqual(["承認", "却下"]);
-    expect(msg.quickReply.items[0].action.data).toBe(`lab=1&id=${r.id}&o=0`);
+    expect(JSON.stringify(msg.contents)).toContain(`#${r.id}`);
   });
 
   it("pending -> answered via postback button", async () => {
