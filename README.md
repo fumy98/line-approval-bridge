@@ -8,7 +8,7 @@ Claude Code / スクリプト ──(MCP / CLI)──▶ Cloudflare Worker ─�
           └──────── 結果をポーリング ───────────┘  └──── Webhook（返信）────────┘
 ```
 
-- `notify(text)` … 一方向の通知
+- `notify(text, send_at?)` … 一方向の通知。`send_at` を付けると **サーバー側で予約**し、Mac がスリープしていてもその時刻に届く
 - `ask_approval(question, options, timeout)` … 「承認 / 却下」などのボタン付きで質問し、**回答が来るまで待つ**
 - `get_reply(id)` … 回答の取得（待ちの再開）
 
@@ -166,7 +166,7 @@ claude mcp add line-approval --scope user \
 
 | ツール | 引数 | 戻り値 |
 |---|---|---|
-| `notify` | `text` | `sent` |
+| `notify` | `text`, `send_at?`（ISO 8601・タイムゾーン付き。例 `2026-10-18T07:00+09:00`） | `sent`、予約時は `scheduled for <時刻> [id=XXXXXX]` |
 | `ask_approval` | `question`, `options?`（既定 `["承認","却下"]`、最大 13 個・各 20 文字）, `allow_free_text?`（既定 true）, `timeout?`（期限・秒、既定 86400）, `wait_seconds?`（この呼び出しで待つ秒数、既定 600） | `status`（`answered` / `expired` / `pending`）, `answer.value`, `answer.kind`（`option` / `text`）, `id` |
 | `get_reply` | `id`, `wait_seconds?` | 同上 |
 
@@ -192,13 +192,30 @@ Claude Code の定期タスクのプロンプトに、次のように書きま�
 ### CLI（シェルスクリプトから）
 
 ```bash
-line-approval notify "<text>"
+line-approval notify "<text>" [--at 2026-10-18T07:00+09:00]   # --at でサーバー側に予約
+line-approval scheduled      # 予約中の通知を一覧
+line-approval cancel <id>    # 予約を取り消し
 line-approval ask "<question>" [--options 承認,却下] [--no-free-text] [--timeout 秒] [--wait 秒 | --no-wait] [--print value|json]
 line-approval get <id> [--wait 秒] [--print value|json]
 line-approval quota          # 今月の送信数
 ```
 
 （`npm link -w client` で `line-approval` コマンドとして使えます。そうしない場合は `node client/dist/cli.js`。）
+
+### 予約送信（時刻指定の通知）
+
+Mac 上のタイマー（`sleep` や cron）で時刻を待つと、スリープ中は送れません。`--at` / `send_at` を使うと予約が Worker の KV に保存され、Cloudflare の Cron Trigger（毎分）が時刻になったら送るので、手元の端末の状態に関係なく届きます。
+
+```bash
+line-approval notify "7時です。ゴミ出しの日" --at "2026-10-18T07:00+09:00"
+# => 予約しました: #K7Q2MX 2026-10-17T22:00:00.000Z
+line-approval scheduled
+line-approval cancel K7Q2MX
+```
+
+- 時刻は **タイムゾーン付きの ISO 8601** で指定します（`+09:00` か `Z`）。`2026-10-18T07:00` のようにタイムゾーンがないものは `400` になります
+- 過去・現在の時刻を指定した場合は、その場ですぐ送ります
+- 送信は分単位です。指定した分の Cron 実行で送られるので、**最大 1〜2 分ほど遅れる**ことがあります
 
 終了コード: `0` 回答あり / `2` 期限切れ / `3` まだ回答待ち（`--wait` 経過） / `1` エラー
 
@@ -225,7 +242,9 @@ esac
 
 | メソッド | パス | 本文 / 結果 |
 |---|---|---|
-| `POST` | `/api/notify` | `{ "text": "...", "to"?: "U..." }` → `{ "ok": true }` |
+| `POST` | `/api/notify` | `{ "text": "...", "to"?: "U...", "sendAt"?: "2026-10-18T07:00+09:00" }` → `200 { "ok": true }`。`sendAt` が未来なら `202 { "ok": true, "scheduled": { id, text, sendAt, createdAt } }` |
+| `GET` | `/api/scheduled` | `{ "scheduled": [{ id, text, sendAt, createdAt }, ...] }`（送信予定順） |
+| `DELETE` | `/api/scheduled/:id` | 予約の取り消し → `{ "ok": true }`（ないときは `404`） |
 | `POST` | `/api/requests` | `{ "question": "...", "options"?: [...], "allowFreeText"?: true, "timeoutSeconds"?: 86400, "to"?: "U..." }` → `201` 依頼オブジェクト |
 | `GET` | `/api/requests/:id` | 依頼オブジェクト `{ id, status, question, options, answer: { kind, value, answeredAt } \| null, ... }` |
 | `GET` | `/api/quota` | `{ "limit": 200, "used": 12 }` |
@@ -239,6 +258,8 @@ esac
 - **月 200 通**: LINE の無料プランでは push（`notify` と `ask_approval`）が 1 回 1 通として数えられます。「受け付けました」の返事は reply なので数えられません。`line-approval quota` で確認できます
 - **反映に最大 1 分ほどかかることがあります**: Workers KV は結果整合のため、ボタンを押してから `answered` が読めるまで遅れる場合があります。人の承認待ちという用途では問題にならない想定です
 - **ボタンはメッセージ内（Flex Message）に表示**されるので、スマホでも PC 版 LINE でも押せます。スマホでは入力欄の上にもクイックリプライのボタンが出ます（こちらは最新のメッセージのみ）
+- **予約送信の上限**: 予約は同時に 100 件まで（超えると `409`）、365 日先まで。予約はすべて KV の 1 キー（`sched:index`）にまとめて保存し、毎分の Cron は `get` 1 回だけ読みます（KV の `list` は無料枠で 1 日 1,000 回までのため使いません）。読み取りは 1 日 1,440 回、書き込みは予約・取り消し・送信のときだけです
+- **予約送信の注意**: KV は結果整合のため、予約直後や送信直後に一覧へ反映されるまで遅れることがあり、まれに送信が 1 分ほど遅れたり、同じ予約が 2 回届いたりする可能性があります。LINE への送信が失敗した場合は次の分に再試行します（最大 5 回）。予約した通知も月 200 通に数えられます
 - **1 対 1 のトークのみ**: グループ・複数人での承認は対象外です
 
 ## ローカル開発
@@ -280,7 +301,7 @@ API（`api/`）とクライアント（`client/`）は分離しており、ク�
 
 ## English summary
 
-**line-approval-bridge** lets an AI agent (Claude Code scheduled tasks, scripts) send you a LINE message and **wait for your reply or approval**, then branch on it. The official LINE Bot MCP Server can only send; this project adds the receiving side: a Cloudflare Worker that verifies LINE webhook signatures, accepts replies only from allowlisted userIds, stores them in Workers KV, and exposes a bearer-token HTTP API. A stdio MCP server (`notify`, `ask_approval`, `get_reply`) and a CLI (exit codes for branching) wrap the API. Runs on free tiers (Cloudflare Workers + LINE's 200 messages/month plan; acknowledgements use the free reply API). Includes a local dry-run mode with a signed-webhook simulator and tests for signature verification, the allowlist and the request lifecycle.
+**line-approval-bridge** lets an AI agent (Claude Code scheduled tasks, scripts) send you a LINE message and **wait for your reply or approval**, then branch on it. The official LINE Bot MCP Server can only send; this project adds the receiving side: a Cloudflare Worker that verifies LINE webhook signatures, accepts replies only from allowlisted userIds, stores them in Workers KV, and exposes a bearer-token HTTP API. Scheduled notifications (`sendAt` / `--at`) are stored in a single KV key and sent by a per-minute Cron Trigger, so they arrive even while your machine sleeps. A stdio MCP server (`notify`, `ask_approval`, `get_reply`) and a CLI (exit codes for branching) wrap the API. Runs on free tiers (Cloudflare Workers + LINE's 200 messages/month plan; acknowledgements use the free reply API). Includes a local dry-run mode with a signed-webhook simulator and tests for signature verification, the allowlist and the request lifecycle.
 
 ## License
 

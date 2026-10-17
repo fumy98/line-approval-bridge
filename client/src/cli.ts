@@ -6,7 +6,10 @@ import { BridgeClient, type ApprovalResult } from "./client.js";
 const USAGE = `line-approval — LINE への通知と承認待ち
 
 使い方:
-  line-approval notify <text>
+  line-approval notify <text> [--at 2026-10-18T07:00+09:00]
+                               --at を付けるとサーバー側で予約し、その時刻に送信
+  line-approval scheduled           予約中の通知を一覧
+  line-approval cancel <id>         予約中の通知を取り消し
   line-approval ask <question> [--options 承認,却下] [--no-free-text]
                                [--timeout 秒] [--wait 秒 | --no-wait] [--print value|json]
   line-approval get <id> [--wait 秒] [--print value|json]
@@ -45,6 +48,7 @@ export async function main(argv: string[], client?: BridgeClient): Promise<numbe
       "no-wait": { type: "boolean" },
       print: { type: "string", default: "json" },
       to: { type: "string" },
+      at: { type: "string" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -59,7 +63,18 @@ export async function main(argv: string[], client?: BridgeClient): Promise<numbe
   switch (cmd) {
     case "notify": {
       if (!arg) throw new Error("notify には本文が必要です");
-      await c.notify(arg, values.to);
+      const r = await c.notify(arg, { to: values.to, sendAt: values.at });
+      if (r.scheduled) process.stdout.write(`予約しました: #${r.scheduled.id} ${r.scheduled.sendAt}\n`);
+      return 0;
+    }
+    case "scheduled": {
+      process.stdout.write(JSON.stringify(await c.listScheduled(), null, 2) + "\n");
+      return 0;
+    }
+    case "cancel": {
+      if (!rest[0]) throw new Error("cancel には id が必要です");
+      await c.cancelScheduled(rest[0]);
+      process.stdout.write(`取り消しました: #${rest[0].toUpperCase()}\n`);
       return 0;
     }
     case "ask": {

@@ -23,6 +23,26 @@ export interface AskOptions {
   to?: string;
 }
 
+export interface NotifyOptions {
+  /** LINE userId (must be allowlisted on the server). Default: server's DEFAULT_TO. */
+  to?: string;
+  /** Send later: ISO 8601 with a time zone (e.g. "2026-10-18T07:00+09:00") or a Date. */
+  sendAt?: string | Date;
+}
+
+export interface ScheduledNotification {
+  id: string;
+  text: string;
+  sendAt: string;
+  createdAt: string;
+}
+
+/** `scheduled` is present when the message was stored for later instead of sent now. */
+export interface NotifyResult {
+  ok: true;
+  scheduled?: ScheduledNotification;
+}
+
 export interface WaitOptions {
   /** Give up waiting locally after this many seconds (the request stays open). */
   waitSeconds?: number;
@@ -92,8 +112,22 @@ export class BridgeClient {
     return data as T;
   }
 
-  notify(text: string, to?: string): Promise<{ ok: true }> {
-    return this.request("POST", "/api/notify", { text, to });
+  /**
+   * Pushes a text message. With `sendAt` (ISO 8601 with offset, or a Date) in the future the
+   * server stores it and its cron sends it at that minute, even if this machine is asleep.
+   */
+  notify(text: string, opts: NotifyOptions | string = {}): Promise<NotifyResult> {
+    const o = typeof opts === "string" ? { to: opts } : opts;
+    const sendAt = o.sendAt instanceof Date ? o.sendAt.toISOString() : o.sendAt;
+    return this.request("POST", "/api/notify", { text, to: o.to, sendAt });
+  }
+
+  listScheduled(): Promise<{ scheduled: ScheduledNotification[] }> {
+    return this.request("GET", "/api/scheduled");
+  }
+
+  cancelScheduled(id: string): Promise<{ ok: true }> {
+    return this.request("DELETE", `/api/scheduled/${encodeURIComponent(id)}`);
   }
 
   /** Sends a question with buttons and returns immediately with the request id. */

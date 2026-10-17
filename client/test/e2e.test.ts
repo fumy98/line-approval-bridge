@@ -5,6 +5,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handle } from "../../api/src/app";
 import { signBody } from "../../api/src/line";
+import { runDue } from "../../api/src/schedule";
 import { FakeLine, MemoryKV, SECRET, TOKEN, USER } from "../../api/test/helpers";
 import { main } from "../src/cli";
 import { BridgeClient } from "../src/client";
@@ -60,10 +61,17 @@ function bridge() {
   };
 
   const client = new BridgeClient({ baseUrl: "https://bridge.test", token: TOKEN, fetch: fetchImpl, sleep });
-  return { client, line, tap, lastPushedId };
+  return { client, line, tap, lastPushedId, deps };
 }
 
 afterEach(() => vi.restoreAllMocks());
+
+/** A minute-aligned time 30 days ahead, as "...+09:00" and as the server's UTC ISO string. */
+function future() {
+  const ms = Math.floor((Date.now() + 30 * 86_400_000) / 60_000) * 60_000;
+  const jst = new Date(ms + 9 * 3_600_000).toISOString().slice(0, 16) + "+09:00";
+  return { jst, utc: new Date(ms).toISOString() };
+}
 
 describe("client library", () => {
   it("askAndWait returns the user's answer", async () => {
@@ -124,6 +132,43 @@ describe("CLI", () => {
     expect(await main(["notify", "完了しました"], client)).toBe(0);
     expect(line.pushes[0].messages[0]).toEqual({ type: "text", text: "完了しました" });
   });
+
+  it("notify --at schedules on the server; scheduled lists it; cancel removes it", async () => {
+    const { client, line } = bridge();
+    const out = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const at = future();
+    expect(await main(["notify", "おはよう", "--at", at.jst], client)).toBe(0);
+    expect(line.pushes).toHaveLength(0);
+    const printed = String(out.mock.calls.at(-1)![0]);
+    expect(printed).toMatch(/^予約しました: #[0-9A-Z]{6} /);
+    expect(printed.trim().endsWith(at.utc)).toBe(true);
+    const id = printed.match(/#([0-9A-Z]{6})/)![1];
+
+    expect(await main(["scheduled"], client)).toBe(0);
+    expect(JSON.parse(String(out.mock.calls.at(-1)![0])).scheduled).toMatchObject([{ id, text: "おはよう" }]);
+
+    expect(await main(["cancel", id.toLowerCase()], client)).toBe(0);
+    expect((await client.listScheduled()).scheduled).toEqual([]);
+    await expect(client.cancelScheduled(id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("rejects a sendAt without a time zone", async () => {
+    const { client } = bridge();
+    await expect(main(["notify", "x", "--at", "2030-01-01T07:00"], client)).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("client scheduling", () => {
+  it("notify with a Date sendAt is delivered by the cron run", async () => {
+    const { client, line, deps } = bridge();
+    const at = new Date(Date.now() + 120_000);
+    const r = await client.notify("2分後", { sendAt: at });
+    expect(r.scheduled?.sendAt).toBe(at.toISOString());
+    await runDue(deps.env.KV, line, Date.now());
+    expect(line.pushes).toHaveLength(0);
+    await runDue(deps.env.KV, line, at.getTime());
+    expect(line.pushes).toEqual([{ to: USER, messages: [{ type: "text", text: "2分後" }] }]);
+  });
 });
 
 describe("MCP server", () => {
@@ -145,6 +190,17 @@ describe("MCP server", () => {
     const mcp = await connect(bridge().client);
     const res = await mcp.callTool({ name: "ask_approval", arguments: { question: "OK?", wait_seconds: 60 } });
     expect(res.structuredContent).toMatchObject({ status: "answered", answer: { value: "承認" } });
+  });
+
+  it("notify with send_at schedules instead of sending", async () => {
+    const { client, line } = bridge();
+    const mcp = await connect(client);
+    const at = future();
+    const res = await mcp.callTool({ name: "notify", arguments: { text: "あとで", send_at: at.jst } });
+    expect((res.content as { text: string }[])[0].text).toMatch(
+      new RegExp(`^scheduled for ${at.utc.replace(/\./g, "\\.")} \\[id=[0-9A-Z]{6}\\]$`),
+    );
+    expect(line.pushes).toHaveLength(0);
   });
 
   it("ask_approval with wait_seconds=0 returns pending; get_reply picks up the answer", async () => {

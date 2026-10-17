@@ -8,6 +8,10 @@ compatibility_date = "2026-10-01"
 binding = "KV"
 id = "cab644ccd64041e2a7aadfa9f6807b24"
 
+# Sends scheduled notifications (POST /api/notify with sendAt). Runs every minute.
+[triggers]
+crons = ["* * * * *"]
+
 [vars]
 DISPLAY_TZ = "Asia/Tokyo"
 

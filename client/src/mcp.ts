@@ -27,12 +27,19 @@ export function createServer(client: BridgeClient): McpServer {
     "notify",
     {
       title: "Send a LINE notification",
-      description: "Push a one-way text message to the user's LINE. Does not wait for a reply.",
-      inputSchema: { text: z.string().min(1).max(5000) },
+      description:
+        "Push a one-way text message to the user's LINE. Does not wait for a reply. " +
+        "With send_at, the server sends it at that time (works even if this machine sleeps).",
+      inputSchema: {
+        text: z.string().min(1).max(5000),
+        send_at: z.string().optional()
+          .describe("Send later. ISO 8601 with time zone, e.g. 2026-10-18T07:00+09:00 (minute precision)"),
+      },
     },
-    async ({ text }) => {
-      await client.notify(text);
-      return { content: [{ type: "text", text: "sent" }] };
+    async ({ text, send_at }) => {
+      const r = await client.notify(text, { sendAt: send_at });
+      const msg = r.scheduled ? `scheduled for ${r.scheduled.sendAt} [id=${r.scheduled.id}]` : "sent";
+      return { content: [{ type: "text", text: msg }] };
     },
   );
 

@@ -1,4 +1,13 @@
 import { verifySignature } from "./line";
+import {
+  MAX_AHEAD_MS,
+  MAX_SCHEDULED,
+  addScheduled,
+  loadScheduled,
+  parseSendAt,
+  removeScheduled,
+  scheduledToPublic,
+} from "./schedule";
 import { getLatest, loadRequest, newId, saveRequest, setLatest, statusOf, toPublic } from "./store";
 import type { ApprovalRequest, Env, LineClient, LineMessage } from "./types";
 
@@ -147,8 +156,23 @@ async function handleNotify(req: Request, deps: Deps): Promise<Response> {
   const t = body.text;
   if (typeof t !== "string" || !t.trim()) return error(400, "`text` is required");
   if (t.length > MAX_TEXT) return error(400, `\`text\` must be <= ${MAX_TEXT} chars`);
+  let sendAt: number | null = null;
+  if (body.sendAt !== undefined && body.sendAt !== null) {
+    sendAt = parseSendAt(body.sendAt);
+    if (sendAt === null) {
+      return error(400, "`sendAt` must be ISO 8601 with a time zone, e.g. 2026-10-18T07:00+09:00");
+    }
+  }
   const to = resolveTarget(deps.env, body.to);
   if (to instanceof Response) return to;
+  const now = (deps.now ?? Date.now)();
+  if (sendAt !== null && sendAt > now) {
+    if (sendAt - now > MAX_AHEAD_MS) return error(400, "`sendAt` must be within 365 days");
+    const s = await addScheduled(deps.env.KV, { text: t, to, sendAt, createdAt: now });
+    if (s === "full") return error(409, `Too many scheduled notifications (max ${MAX_SCHEDULED})`);
+    return json({ ok: true, scheduled: scheduledToPublic(s) }, 202);
+  }
+  // No sendAt, or a time already in the past: send now.
   await deps.line.push(to, [text(t)]);
   return json({ ok: true });
 }
@@ -360,6 +384,16 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
       if (path === "/api/requests" && req.method === "POST") return await handleCreateRequest(req, deps);
       const m = path.match(/^\/api\/requests\/([0-9A-Za-z]{6})$/);
       if (m && req.method === "GET") return await handleGetRequest(m[1], deps);
+      if (path === "/api/scheduled" && req.method === "GET") {
+        const items = await loadScheduled(deps.env.KV);
+        return json({ scheduled: items.map(scheduledToPublic) });
+      }
+      const sm = path.match(/^\/api\/scheduled\/([0-9A-Za-z]{6})$/);
+      if (sm && req.method === "DELETE") {
+        return (await removeScheduled(deps.env.KV, sm[1]))
+          ? json({ ok: true })
+          : error(404, "Scheduled notification not found");
+      }
       if (path === "/api/quota" && req.method === "GET") return json(await deps.line.quota());
       if (path === "/api/setup/webhook" && req.method === "POST") {
         return json(await deps.line.setupWebhook(`${url.origin}/webhook`));
