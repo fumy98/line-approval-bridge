@@ -332,6 +332,9 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
       const m = path.match(/^\/api\/requests\/([0-9A-Za-z]{6})$/);
       if (m && req.method === "GET") return await handleGetRequest(m[1], deps);
       if (path === "/api/quota" && req.method === "GET") return json(await deps.line.quota());
+      if (path === "/api/setup/webhook" && req.method === "POST") {
+        return json(await deps.line.setupWebhook(`${url.origin}/webhook`));
+      }
     } catch (e) {
       console.log(`api error: ${e}`);
       return error(502, e instanceof Error ? e.message : String(e));

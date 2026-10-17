@@ -22,6 +22,17 @@ describe("API auth", () => {
   });
 });
 
+describe("setup/webhook", () => {
+  it("registers <origin>/webhook on the LINE channel (auth required)", async () => {
+    const t = setup();
+    expect((await t.api("POST", "/api/setup/webhook", undefined, "wrong")).status).toBe(401);
+    const res = await t.api("POST", "/api/setup/webhook");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ endpoint: "https://bridge.test/webhook", test: { success: true } });
+    expect(t.line.webhookEndpoints).toEqual(["https://bridge.test/webhook"]);
+  });
+});
+
 describe("notify", () => {
   it("pushes a text message to the default user", async () => {
     const t = setup();

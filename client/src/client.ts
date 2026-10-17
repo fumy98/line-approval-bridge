@@ -109,6 +109,15 @@ export class BridgeClient {
     return this.request("GET", "/api/quota");
   }
 
+  /** Registers this Worker's /webhook URL on the LINE channel and runs LINE's webhook test. */
+  setupWebhook(): Promise<{
+    endpoint: string;
+    active: boolean;
+    test: { success: boolean; statusCode?: number; reason?: string; detail?: string };
+  }> {
+    return this.request("POST", "/api/setup/webhook");
+  }
+
   /**
    * Polls until the request is answered or expired, or until waitSeconds elapse.
    * Returns the last seen state (status may still be "pending" on local timeout).

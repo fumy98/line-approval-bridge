@@ -50,4 +50,13 @@ export interface LineClient {
   push(to: string, messages: LineMessage[]): Promise<void>;
   reply(replyToken: string, messages: LineMessage[]): Promise<void>;
   quota(): Promise<{ limit: number | null; used: number }>;
+  /** Registers the webhook URL on the LINE channel, then asks LINE to send a test event to it. */
+  setupWebhook(endpoint: string): Promise<WebhookSetupResult>;
+}
+
+export interface WebhookSetupResult {
+  endpoint: string;
+  /** "Use webhook" toggle in the LINE console. Must be true to receive replies. */
+  active: boolean;
+  test: { success: boolean; statusCode?: number; reason?: string; detail?: string };
 }

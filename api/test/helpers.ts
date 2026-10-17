@@ -29,6 +29,11 @@ export class FakeLine implements LineClient {
   async quota() {
     return { limit: 200, used: this.pushes.length };
   }
+  webhookEndpoints: string[] = [];
+  async setupWebhook(endpoint: string) {
+    this.webhookEndpoints.push(endpoint);
+    return { endpoint, active: true, test: { success: true, statusCode: 200 } };
+  }
   lastReplyText(): string {
     const r = this.replies.at(-1);
     return (r?.messages[0] as { text: string } | undefined)?.text ?? "";

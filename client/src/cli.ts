@@ -11,6 +11,7 @@ const USAGE = `line-approval — LINE への通知と承認待ち
                                [--timeout 秒] [--wait 秒 | --no-wait] [--print value|json]
   line-approval get <id> [--wait 秒] [--print value|json]
   line-approval quota
+  line-approval setup-webhook   LINE チャネルに Webhook URL を登録して疎通テスト
 
 環境変数:
   LINE_APPROVAL_URL    デプロイした Worker の URL (例 https://line-approval-bridge.xxx.workers.dev)
@@ -90,6 +91,12 @@ export async function main(argv: string[], client?: BridgeClient): Promise<numbe
     case "quota": {
       process.stdout.write(JSON.stringify(await c.quota()) + "\n");
       return 0;
+    }
+    case "setup-webhook": {
+      const r = await c.setupWebhook();
+      process.stdout.write(JSON.stringify(r, null, 2) + "\n");
+      if (!r.active) process.stderr.write("注意: LINE 側で「Webhook の利用」がオフです。コンソールでオンにしてください。\n");
+      return r.test.success && r.active ? 0 : 1;
     }
     default:
       process.stderr.write(`不明なコマンド: ${cmd}\n\n${USAGE}`);

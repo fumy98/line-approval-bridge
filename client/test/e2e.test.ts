@@ -96,6 +96,13 @@ describe("client library", () => {
 });
 
 describe("CLI", () => {
+  it("setup-webhook registers the endpoint", async () => {
+    const { client, line } = bridge();
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    expect(await main(["setup-webhook"], client)).toBe(0);
+    expect(line.webhookEndpoints).toEqual(["https://bridge.test/webhook"]);
+  });
+
   it("ask --print value prints the answer and exits 0", async () => {
     const { client } = bridge();
     const out = vi.spyOn(process.stdout, "write").mockImplementation(() => true);

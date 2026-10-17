@@ -113,6 +113,8 @@ https://line-approval-bridge.<あなたのサブドメイン>.workers.dev/webhoo
 
 を入れて「更新」→「検証」で **成功** と出れば OK。その下の **Webhook の利用** をオンにします。
 
+（コンソールを開かなくても、手順 5 のあとで `node client/dist/cli.js setup-webhook` を実行すれば、LINE の API 経由で URL の登録と疎通テストまで行えます。）
+
 ### 5. クライアント（CLI / MCP）を準備する
 
 ```bash

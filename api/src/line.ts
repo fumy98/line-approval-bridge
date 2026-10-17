@@ -1,4 +1,4 @@
-import type { Env, LineClient, LineMessage } from "./types";
+import type { Env, LineClient, LineMessage, WebhookSetupResult } from "./types";
 
 const API = "https://api.line.me/v2/bot";
 
@@ -57,25 +57,41 @@ export function createLineClient(env: Env, fetchImpl: typeof fetch = fetch): Lin
     Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`,
   };
 
-  async function call(path: string, body: unknown): Promise<void> {
+  async function call(path: string, body: unknown, method = "POST"): Promise<Response | null> {
     if (dryRun) {
-      console.log(`[LINE_DRY_RUN] POST ${path} ${JSON.stringify(body)}`);
-      return;
+      console.log(`[LINE_DRY_RUN] ${method} ${path} ${JSON.stringify(body)}`);
+      return null;
     }
     const res = await fetchImpl(`${API}${path}`, {
-      method: "POST",
+      method,
       headers,
       body: JSON.stringify(body),
     });
     if (!res.ok) {
       throw new LineApiError(res.status, await res.text());
     }
+    return res;
   }
 
   return {
-    push: (to: string, messages: LineMessage[]) => call("/message/push", { to, messages }),
-    reply: (replyToken: string, messages: LineMessage[]) =>
-      call("/message/reply", { replyToken, messages }),
+    async push(to: string, messages: LineMessage[]) {
+      await call("/message/push", { to, messages });
+    },
+    async reply(replyToken: string, messages: LineMessage[]) {
+      await call("/message/reply", { replyToken, messages });
+    },
+    async setupWebhook(endpoint: string): Promise<WebhookSetupResult> {
+      if (dryRun) {
+        console.log(`[LINE_DRY_RUN] setupWebhook ${endpoint}`);
+        return { endpoint, active: true, test: { success: true } };
+      }
+      await call("/channel/webhook/endpoint", { endpoint }, "PUT");
+      const info = await fetchImpl(`${API}/channel/webhook/endpoint`, { headers });
+      if (!info.ok) throw new LineApiError(info.status, await info.text());
+      const { active } = (await info.json()) as { endpoint: string; active: boolean };
+      const test = (await (await call("/channel/webhook/test", { endpoint }))!.json()) as WebhookSetupResult["test"];
+      return { endpoint, active, test };
+    },
     async quota() {
       if (dryRun) return { limit: null, used: 0 };
       const [q, c] = await Promise.all([
