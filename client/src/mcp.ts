@@ -20,12 +20,13 @@ const result = (r: ApprovalResult) => ({
   structuredContent: r as unknown as Record<string, unknown>,
 });
 
-/** LINE_APPROVAL_SUB_TO="Ubbb,..." — extra recipients for notify calls made with also_sub (must be in ALLOWED_USER_IDS). */
-export function subTargets(env: NodeJS.ProcessEnv = process.env): string[] {
-  return (env.LINE_APPROVAL_SUB_TO ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+/** LINE_APPROVAL_NOTIFY_TO="Uaaa,Ubbb" sends every notify to each listed user (all must be in ALLOWED_USER_IDS). */
+export function notifyTargets(env: NodeJS.ProcessEnv = process.env): (string | undefined)[] {
+  const ids = (env.LINE_APPROVAL_NOTIFY_TO ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return ids.length ? ids : [undefined];
 }
 
-export function createServer(client: BridgeClient, subs = subTargets()): McpServer {
+export function createServer(client: BridgeClient, targets = notifyTargets()): McpServer {
   const server = new McpServer({ name: "line-approval-bridge", version: "0.1.0" });
 
   server.registerTool(
@@ -39,17 +40,14 @@ export function createServer(client: BridgeClient, subs = subTargets()): McpServ
         text: z.string().min(1).max(5000),
         send_at: z.string().optional()
           .describe("Send later. ISO 8601 with time zone, e.g. 2026-10-18T07:00+09:00 (minute precision)"),
-        also_sub: z.boolean().optional()
-          .describe("Also send to the sub recipients (LINE_APPROVAL_SUB_TO). Use only for completion reports. Default false"),
       },
     },
-    async ({ text, send_at, also_sub }) => {
-      const targets: (string | undefined)[] = [undefined, ...(also_sub ? subs : [])];
+    async ({ text, send_at }) => {
       const lines: string[] = [];
       for (const to of targets) {
         const r = await client.notify(text, { sendAt: send_at, to });
         const msg = r.scheduled ? `scheduled for ${r.scheduled.sendAt} [id=${r.scheduled.id}]` : "sent";
-        lines.push(`${to ?? "main"}: ${msg}`);
+        lines.push(targets.length > 1 ? `${to}: ${msg}` : msg);
       }
       return { content: [{ type: "text", text: lines.join("\n") }] };
     },
