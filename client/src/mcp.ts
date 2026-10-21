@@ -20,7 +20,13 @@ const result = (r: ApprovalResult) => ({
   structuredContent: r as unknown as Record<string, unknown>,
 });
 
-export function createServer(client: BridgeClient): McpServer {
+/** LINE_APPROVAL_NOTIFY_TO="Uaaa,Ubbb" sends every notify to each listed user (all must be in ALLOWED_USER_IDS). */
+export function notifyTargets(env: NodeJS.ProcessEnv = process.env): (string | undefined)[] {
+  const ids = (env.LINE_APPROVAL_NOTIFY_TO ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return ids.length ? ids : [undefined];
+}
+
+export function createServer(client: BridgeClient, targets = notifyTargets()): McpServer {
   const server = new McpServer({ name: "line-approval-bridge", version: "0.1.0" });
 
   server.registerTool(
@@ -37,9 +43,13 @@ export function createServer(client: BridgeClient): McpServer {
       },
     },
     async ({ text, send_at }) => {
-      const r = await client.notify(text, { sendAt: send_at });
-      const msg = r.scheduled ? `scheduled for ${r.scheduled.sendAt} [id=${r.scheduled.id}]` : "sent";
-      return { content: [{ type: "text", text: msg }] };
+      const lines: string[] = [];
+      for (const to of targets) {
+        const r = await client.notify(text, { sendAt: send_at, to });
+        const msg = r.scheduled ? `scheduled for ${r.scheduled.sendAt} [id=${r.scheduled.id}]` : "sent";
+        lines.push(targets.length > 1 ? `${to}: ${msg}` : msg);
+      }
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     },
   );
 
